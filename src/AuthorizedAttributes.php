@@ -1,6 +1,6 @@
 <?php
 
-namespace Salomoni;
+namespace Vantage;
 
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -27,15 +27,17 @@ trait AuthorizedAttributes
             return $this->hidden;
         }
 
-        return array_filter($this->hidden, function ($attribute) use ($policy) {
-            $view_ability = $this->getAttributeViewAbilityMethod($attribute);
+        // If no policy found, check does this extend another model
+        // and try get the policy from that one
+        if (! $policy && static::class !== self::class) {
+            $policy = Gate::getPolicyFor(self::class);
+        }
 
-            if (is_callable([$policy, $view_ability])) {
-                return Gate::denies($view_ability, $this);
-            }
+        if (! $policy) {
+            return $this->hidden;
+        }
 
-            return true;
-        });
+        return AttributeGate::getHidden($this, $this->hidden, $policy);
     }
 
     /**
@@ -49,26 +51,17 @@ trait AuthorizedAttributes
             return $this->fillable;
         }
 
-        return array_filter($this->fillable, function ($attribute) use ($policy) {
-            $update_ability = $this->getAttributeUpdateAbilityMethod($attribute);
+        // If no policy found, check does this extend another model
+        // and try get the policy from that one
+        if (! $policy && static::class !== self::class) {
+            $policy = Gate::getPolicyFor(self::class);
+        }
 
-            if (is_callable([$policy, $update_ability])) {
-                return ! Gate::denies($update_ability, $this);
-            }
+        if (! $policy) {
+            return $this->fillable;
+        }
 
-            return true;
-        });
-    }
-
-    /**
-     * Backward-compatibility
-     *
-     * @param $attribute
-     * @return string
-     */
-    protected function getAttributeAbilityMethod($attribute)
-    {
-        return $this->getAttributeViewAbilityMethod($attribute);
+        return AttributeGate::getFillable($this, $this->fillable, $policy);
     }
 
     /**
@@ -77,19 +70,19 @@ trait AuthorizedAttributes
      * @param  string  $attribute
      * @return string
      */
-    protected function getAttributeViewAbilityMethod($attribute)
+    public function getAttributeViewAbilityMethod($attribute)
     {
         return 'see'.Str::studly($attribute);
     }
 
     /**
-     * Get the method name for the ability to update attribute in the model policy.
+     * Get the model policy ability method name to update an model attribute.
      *
      * @param  string  $attribute
      * @return string
      */
-    protected function getAttributeUpdateAbilityMethod($attribute)
+    public function getAttributeUpdateAbilityMethod($attribute)
     {
-        return 'change'.Str::studly($attribute);
+        return 'edit'.Str::studly($attribute);
     }
 }
